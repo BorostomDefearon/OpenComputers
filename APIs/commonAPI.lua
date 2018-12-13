@@ -1,4 +1,6 @@
-local component = require("component)
+local component = require("component")
+local serialization = require("serialization")
+local event = require("event")
 -- Common messages
 local messages = {
 	REBOOT="reboot",
@@ -11,19 +13,62 @@ local basicPorts = {
 	arp={
 		toServer=2,
 		fromServer=3
+	},
+	fluid={
+		requestFluidData=100,
+		sendFluidData=101,
+		getFluid=102
 	}
 }
 
-commonAPI = {
-	messages=messages,
-	basicPorts=basicPorts
+local APIs = {
+	
 }
 
+commonAPI = {
+	messages = messages,
+	ports = basicPorts,
+	APIs = APIs
+}
+
+--############################
+-- Private functions
+--############################
+function handleCommands(keyboardAddress, char, code, playerName)
+	event.ignore("key_down", handleCommands)
+	io.write("")
+	io.write(">> ")
+	command = io.read()
+	if command == "exit" then
+		os.execute("reboot")
+	end
+	event.listen("key_down", handleCommands)
+end
+--############################
+-- Public functions
+--############################
+
+-- Reboot computer
 function commonAPI.reboot()
 	os.execute("reboot")
 end
 
--- Gets the used modem if there is multiple
-function commonAPI.membershipReport(modem)
-	modem.broadcast(basicPorts.arp.toServer, messages.SET_ADDRESS)
+-- Handle basic commands
+function commonAPI.initCommandHandler()
+	event.listen("key_down", handleCommands)
 end
+
+-- Open modem on machine's used port-list
+function commonAPI.initModem(modem, port_list)
+	for i, port in ipairs(port_list) do
+		modem.open(port)
+	end
+end
+
+-- Reports network membership on given modem and DNS
+function commonAPI.membershipReport(modem, DNS)
+	modem.broadcast(basicPorts.arp.toServer, DNS)
+end
+
+
+return commonAPI
