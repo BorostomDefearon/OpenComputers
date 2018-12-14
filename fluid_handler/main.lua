@@ -52,7 +52,7 @@ function updateFluids()
 	for i,transposer in ipairs(transposers) do
 		for j,side in ipairs(fluidSides) do
 			local fluid = transposer.getFluidInTank(side)[1]
-			if  fluid ~= nil then
+			if  fluid.label ~= nil then
 				table.insert(fluids, {data=fluid, transposer=i, side=side})
 			end
 		end
