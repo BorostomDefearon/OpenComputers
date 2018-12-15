@@ -1,6 +1,10 @@
 local component = require("component")
 local serialization = require("serialization")
+local keyboard=require("keyboard")
 local event = require("event")
+
+local commandButton = "199"
+
 -- Common messages
 local messages = {
 	REBOOT="reboot",
@@ -34,15 +38,15 @@ commonAPI = {
 --############################
 -- Private functions
 --############################
-function handleCommands(keyboardAddress, char, code, playerName)
-	event.ignore("key_down", handleCommands)
-	io.write("")
-	io.write(">> ")
-	command = io.read()
-	if command == "exit" then
-		os.execute("reboot")
+function handleCommands(event, address, char, code)
+	if tostring(code) == commandButton then
+		print("")
+		io.write(">> ")
+		command = io.read()
+		if command == "exit" then
+			os.execute("reboot")
+		end
 	end
-	event.listen("key_down", handleCommands)
 end
 --############################
 -- Public functions

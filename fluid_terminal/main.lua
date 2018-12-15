@@ -22,7 +22,13 @@ local ports = {
 	commonAPI.ports.fluid.getFluid
 }
 
+local serverMessage = "TODO: Server message!"
 local buttons = {}
+local toOrder = 1
+local dimension = "B"
+local selectedFluidIndex = nil
+local minValue = 1
+local maxValue = 1
 
 -- Functions
 function sizeOf(array)
@@ -36,64 +42,124 @@ end
 function GUI()
 	buttonAPI.clearTable()
 	buttonAPI.addButton(" << ", prevFluid, 1, "center")
-	--[[
-	buttonAPI.addButton(" CURR ", test, 2, "center", buttonAPI.colors.passive)
-	buttonAPI.addButton(" NEXT ", test, 2, "right", buttonAPI.colors.clickable)
-	buttonAPI.addButton(" PREV ", test, 2, "left", buttonAPI.colors.passive)
-	--]]
+	
 	if buttons.prev and buttons.curr and buttons.nxt then
-		--[[
-		buttonAPI.addButtonImplicit(buttons.prev, test, 1,1, 10, 10, buttonAPI.colors.passive)
-		buttonAPI.addButtonImplicit(buttons.curr, test, 1, 11, 10, 10,  buttonAPI.colors.clickable)
-		buttonAPI.addButtonImplicit(buttons.next, test, 1, 22, 10, 10,  buttonAPI.colors.passive)
-		print(buttons.prev,buttons.curr,buttons.nxt)
-		--]]
+		local selectedFluidData = fluids[selectedFluidIndex]
+		setValues(selectedFluidData)
+		
+		-- Main buttons
 		buttonAPI.addButton(buttons.prev, prevFluid, 2, "left", buttonAPI.colors.grey)
 		buttonAPI.addButton(buttons.curr, requestFluid, 2, "center", buttonAPI.colors.red)
 		buttonAPI.addButton(buttons.nxt, nextFluid, 2, "right", buttonAPI.colors.grey)
+		-- Dimension changer
+		buttonAPI.addButtonImplicit("B/mB", changeDimension, 38, 22, 4, 1, buttonAPI.colors.red)
+		-- Increase, decrease
+		buttonAPI.addButtonImplicit("-",  decrease, 32, 20, 1, 1, buttonAPI.colors.red)
+		buttonAPI.addButtonImplicit("+",  increase, 47, 20, 1, 1, buttonAPI.colors.red)
+		-- toOrder
+		buttonAPI.addButtonImplicit(tostring(toOrder)..dimension,  handEdit, 36, 20, 8, 1, buttonAPI.colors.grey)
+		
+		-- Switch dimension
+		if dimension == "B" then
+			buttonAPI.label(1,21, "Available: "..math.floor(selectedFluidData.amount/1000).."B of "..math.floor(selectedFluidData.capacity/1000).."B.")
+		elseif dimension == "mB" then
+			buttonAPI.label(1,21, "Available: "..selectedFluidData.amount.."mB of "..selectedFluidData.capacity.."mB.")
+		end
+		
+		-- OK btn
+		buttonAPI.addButtonImplicit("OK", requestFluid, 38, 24, 4, 1, buttonAPI.colors.green)
 	end
 	
 	buttonAPI.addButton(" >> ",nextFluid, 3, "center")
+	
 	buttonAPI.heading("Choose the fluid you want to request! Use <- and -> keys to navigate!")
-	buttonAPI.label(1,24,"Version: beta")
+	
+	
+	buttonAPI.label(1,22, serverMessage)
 	buttonAPI.screen()
 end
 
+function setValues(selectedFluid)
+	if dimension=="B" then
+		maxValue = math.floor(selectedFluid.amount/1000)
+	else
+		maxValue = selectedFluid.amount
+	end
+end
+
+function handEdit()
+	term.setCursor(1, 23)
+	io.write(">> ")
+	local input = io.read()
+	if tonumber(input) then
+		if tonumber(input) >= minValue and tonumber(input) <= maxValue then
+			toOrder = tonumber(input)
+		end
+	end
+	GUI()
+end
+
+function changeDimension()
+	if dimension == "B" then
+		dimension = "mB"
+	else
+		dimension = "B"
+	end
+	GUI()
+end
+
+function increase()
+	if toOrder+1 <= maxValue then
+		toOrder = toOrder + 1
+		GUI()
+	end
+end
+
+function decrease()
+	if toOrder > 1 then
+		toOrder = toOrder - 1
+		GUI()
+	end
+end
+
 function requestFluid()
-	print(fluidKeys[buttons.curr])	
+		
 end
 
 function prevFluid()
-	selectedFluid = selectedFluid - 1
+	selectedFluidIndex = selectedFluidIndex - 1
+	toOrder = 1
+	dimension = "B"
 	drawButtons()
 end
 
 function nextFluid()
-	selectedFluid = selectedFluid + 1
+	selectedFluidIndex = selectedFluidIndex + 1
+	toOrder = 1
+	dimension = "B"
 	drawButtons()
 end
 
-
 function drawButtons()
 	buttons = {}
-	--if selectedFluid == nil or selectedFluid < 1 or fluidNames[selectedFluid] == nil then selectedFluid = 1 end
-	if selectedFluid == nil or fluidNames[selectedFluid] == nil then selectedFluid = 1 end
-	if selectedFluid < 1 then selectedFluid = sizeOf(fluidNames) end
+	--if selectedFluidIndex == nil or selectedFluidIndex < 1 or fluidNames[selectedFluidIndex] == nil then selectedFluidIndex = 1 end
+	if selectedFluidIndex == nil or fluids[selectedFluidIndex] == nil then selectedFluidIndex = 1 end
+	if selectedFluidIndex < 1 then selectedFluidIndex = sizeOf(fluids) end
 	-- Current
-	buttons.curr = fluidNames[selectedFluid][2]
+	buttons.curr = fluids[selectedFluidIndex].label
 	-- Prev
-	if fluidNames[selectedFluid-1] == nil then
+	if fluids[selectedFluidIndex-1] == nil then
 		buttons.prev = " "
 	else
-		buttons.prev = fluidNames[selectedFluid-1][2] 
+		buttons.prev = fluids[selectedFluidIndex-1].label
 	end
 	-- Next
-	if fluidNames[selectedFluid+1] == nil then
+	if fluids[selectedFluidIndex+1] == nil then
 		buttons.nxt = " "
 	else
-		buttons.nxt = fluidNames[selectedFluid+1][2] 
+		buttons.nxt = fluids[selectedFluidIndex+1].label
 	end
-	
+	--print(buttons.prev, buttons.curr, buttons.nxt)
 	GUI()
 end
 
@@ -113,19 +179,16 @@ end
 
 function updateFluids(rawData)
 	fluids = {}
-	fluidNames = {}
 	local tmp = serialization.unserialize(rawData)
 	for i, fluid in ipairs(tmp) do
 		table.insert(fluids, fluid.data)
-		table.insert(fluidNames, {fluid.data.name, fluid.data.label})
-		fluidKeys[fluid.data.label] = fluid.data.name
 	end
 	
-	table.sort(fluidNames, function (left, right)
-    		return left[2] < right[2]
+	table.sort(fluids, function (left, right)
+    		return left.label < right.label
 	end )
-	print(serialization.serialize(fluidNames))
-	if fluidNames ~= nil then drawButtons() end
+	
+	if fluids ~= nil then drawButtons() end
 end
 
 -- INIT

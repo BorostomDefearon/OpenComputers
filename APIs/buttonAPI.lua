@@ -47,6 +47,7 @@ local tAlignment = {
 end
 
 function flash(name)
+	if not name or not button[name] or not button[name]["color"] then return end
 	local originalColor = button[name]["color"]
   	API.changeColor(name, bColors.black)
   	os.sleep(0.1)
