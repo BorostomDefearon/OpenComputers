@@ -7,7 +7,10 @@ local component = require("component")
 local modem = component.modem
 local ports = {
 	commonAPI.ports.arp.toServer,
-	commonAPI.ports.arp.fromServer
+	commonAPI.ports.arp.fromServer,
+	commonAPI.ports.arp.askAddress,
+	commonAPI.ports.arp.sendAddress,
+	commonAPI.ports.arp.noAddressError
 }
 
 -- DATA
@@ -15,10 +18,11 @@ local tRoute = {}
 
 -- FUNCTIONS
 function drawTable()
+	term.clear()
 	print("########## Routing Table ##########")
-	print("----------------------------------------------------")
-	for i,row in ipairs(tRoute) do
-	        print("| "..row.dns,"|",row.address.." |")
+	print("-----------------------------------")
+	for dns,address in pairs(tRoute) do
+	        print("| "..dns,"|",address.." |")
 	end
 end
 
@@ -28,18 +32,28 @@ function sendARP()
 	modem.broadcast(commonAPI.ports.arp.fromServer, commonAPI.messages.GET_ADDRESS)
 end
 
+-- Sets routing table
 function setRoutingTable(dns, address)
-	for i,row in ipairs(tRoute) do
-		if row.dns == dns or row.address == address then
-			return
-		end
-	end
-	table.insert(tRoute, {dns=dns, address=address})
+	tRoute[dns] = address
 end
 
+-- Sends back requested machine's data
+function sendRequestedAddress(to, reqDNS)
+	local reqAddress = tRoute[reqDNS]
+	if not reqAddress then
+		modem.send(to, commonAPI.ports.arp.noAddressError, "ERROR! No address found for "..reqDNS..".")
+	else
+		modem.send(to, commonAPI.ports.arp.sendAddress, reqAddress)
+	end
+end
+
+-- Handles incoming modem messages
 function handleModemMessage(eventType, myAddress, senderAddress, onPort, fromDistance, message)
 		if onPort == commonAPI.ports.arp.toServer then
 			setRoutingTable(message, senderAddress)
+			drawTable()
+		elseif onPort == commonAPI.ports.arp.askAddress then
+			sendRequestedAddress(senderAddress, message)
 		end 
 end
 
@@ -50,7 +64,6 @@ commonAPI.initCommandHandler()
 event.timer(30, sendARP, math.huge)
 
 while true do
-	term.clear()
 	drawTable()
 	os.sleep(5)
 end

@@ -9,20 +9,28 @@ local event = require("event")
 local term = require("term")
 local modem = component.modem
 
+-- Addresses
+local addresses = {
+	ARPaddress = nil,
+	fluidHandler = nil
+}
+
 -- DATA
-local DNS = "FLUID_TERMINAL"
+local DNS = commonAPI.DNS.FLUID_TERMINAL
 local fluids = {}
-local fluidNames = {}
-local fluidKeys = {}
+
 local ports = {
 	commonAPI.ports.arp.toServer,
 	commonAPI.ports.arp.fromServer,
+	commonAPI.ports.arp.askAddress,
+	commonAPI.ports.arp.sendAddress,
+	commonAPI.ports.arp.noAddressError,
 	commonAPI.ports.fluid.requestFluidData,
 	commonAPI.ports.fluid.sendFluidData,
-	commonAPI.ports.fluid.getFluid
+	commonAPI.ports.fluid.getFluid,
+	commonAPI.ports.fluid.message
 }
 
-local serverMessage = "TODO: Server message!"
 local buttons = {}
 local toOrder = 1
 local dimension = "B"
@@ -30,7 +38,7 @@ local selectedFluidIndex = nil
 local minValue = 1
 local maxValue = 1
 
--- Functions
+-- Returns the size of an array
 function sizeOf(array)
 	local cnt = 0
 	for i,v in ipairs(array) do
@@ -39,6 +47,7 @@ function sizeOf(array)
 	return cnt
 end
 
+-- Draws GUI
 function GUI()
 	buttonAPI.clearTable()
 	buttonAPI.addButton(" << ", prevFluid, 1, "center")
@@ -72,13 +81,12 @@ function GUI()
 	
 	buttonAPI.addButton(" >> ",nextFluid, 3, "center")
 	
-	buttonAPI.heading("Choose the fluid you want to request! Use <- and -> keys to navigate!")
+	--buttonAPI.heading("Choose the fluid you want to request!")
 	
-	
-	buttonAPI.label(1,22, serverMessage)
 	buttonAPI.screen()
 end
 
+-- Sets the max and min values of toOrder
 function setValues(selectedFluid)
 	if dimension=="B" then
 		maxValue = math.floor(selectedFluid.amount/1000)
@@ -87,9 +95,9 @@ function setValues(selectedFluid)
 	end
 end
 
+-- Handles hand-edit for input buckets
 function handEdit()
 	term.setCursor(1, 23)
-	io.write(">> ")
 	local input = io.read()
 	if tonumber(input) then
 		if tonumber(input) >= minValue and tonumber(input) <= maxValue then
@@ -99,15 +107,18 @@ function handEdit()
 	GUI()
 end
 
+-- Changes the dimension
 function changeDimension()
 	if dimension == "B" then
 		dimension = "mB"
 	else
 		dimension = "B"
 	end
+	toOrder = 1
 	GUI()
 end
 
+-- Increases toOrder
 function increase()
 	if toOrder+1 <= maxValue then
 		toOrder = toOrder + 1
@@ -115,6 +126,7 @@ function increase()
 	end
 end
 
+-- Decreases toOrder
 function decrease()
 	if toOrder > 1 then
 		toOrder = toOrder - 1
@@ -122,10 +134,17 @@ function decrease()
 	end
 end
 
+-- Request fluid
 function requestFluid()
-		
+	addresses.fluidHandler = commonAPI.requestAddress(addresses.ARPaddress, commonAPI.DNS.FLUID_HANDLER)
+	if addresses.fluidHandler then
+		local qty = toOrder
+		if dimension == "B" then qty = qty * 1000 end
+		modem.send(addresses.fluidHandler, commonAPI.ports.fluid.getFluid, serialization.serialize({name=fluids[selectedFluidIndex].name, quantity=qty}))
+	end
 end
 
+-- Navigation left
 function prevFluid()
 	selectedFluidIndex = selectedFluidIndex - 1
 	toOrder = 1
@@ -133,6 +152,7 @@ function prevFluid()
 	drawButtons()
 end
 
+-- Navigation right
 function nextFluid()
 	selectedFluidIndex = selectedFluidIndex + 1
 	toOrder = 1
@@ -140,9 +160,9 @@ function nextFluid()
 	drawButtons()
 end
 
+-- Initializes buttons
 function drawButtons()
 	buttons = {}
-	--if selectedFluidIndex == nil or selectedFluidIndex < 1 or fluidNames[selectedFluidIndex] == nil then selectedFluidIndex = 1 end
 	if selectedFluidIndex == nil or fluids[selectedFluidIndex] == nil then selectedFluidIndex = 1 end
 	if selectedFluidIndex < 1 then selectedFluidIndex = sizeOf(fluids) end
 	-- Current
@@ -159,29 +179,45 @@ function drawButtons()
 	else
 		buttons.nxt = fluids[selectedFluidIndex+1].label
 	end
-	--print(buttons.prev, buttons.curr, buttons.nxt)
 	GUI()
 end
 
+function handleTerminalAnswer(message)
+	if message.messageType == commonAPI.messages.ERROR then
+		commonAPI.writeError(message.text)
+	elseif message.messageType == commonAPI.messages.WARNING then
+		commonAPI.writeWarning(message.text)
+	elseif message.messageType == commonAPI.messages.SUCCESS then
+		commonAPI.writeSuccess(message.text)
+	end
+end
+
+-- Handles modem messages
 function handleModemMessage(eventType, myAddress, senderAddress, onPort, fromDistance, message)
 		-- Reply to ARP server
 		if onPort == commonAPI.ports.arp.fromServer then
 			commonAPI.membershipReport(modem, DNS)
+			addresses.ARPaddress = senderAddress
 		-- Reply to Fluid terminal
 		elseif onPort == commonAPI.ports.fluid.sendFluidData then
 			updateFluids(message)
+		elseif onPort == commonAPI.ports.fluid.message then
+			handleTerminalAnswer(serialization.unserialize(message))
 		end 
 end
 
+-- Request fluid data from fluid handler
 function requestFluidData()
+	-- TODO: ne broadcast, hanem kozvetlen...
 	modem.broadcast(commonAPI.ports.fluid.requestFluidData, "Requesting fluid data...")
 end
 
+-- Updates the fluid table variable
 function updateFluids(rawData)
 	fluids = {}
 	local tmp = serialization.unserialize(rawData)
 	for i, fluid in ipairs(tmp) do
-		table.insert(fluids, fluid.data)
+		table.insert(fluids, fluid)
 	end
 	
 	table.sort(fluids, function (left, right)
@@ -194,7 +230,7 @@ end
 -- INIT
 commonAPI.initModem(modem, ports)
 event.listen("modem_message", handleModemMessage)
-event.timer(5, requestFluidData, math.huge)
+event.timer(30, requestFluidData, math.huge)
 commonAPI.initCommandHandler()
 buttonAPI.setResolution(80, 25)
 GUI()
