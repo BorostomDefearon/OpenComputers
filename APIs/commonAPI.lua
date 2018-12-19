@@ -144,16 +144,17 @@ function commonAPI.initCommandHandler()
 	event.listen("key_down", handleCommands)
 end
 
--- Open modem on machine's used port-list
-function commonAPI.initModem(modem, port_list)
-	for i, port in ipairs(port_list) do
-		modem.open(port)
-	end
-end
-
 -- Reports network membership on given modem and DNS
 function commonAPI.membershipReport(modem, DNS)
 	modem.broadcast(basicPorts.arp.toServer, DNS)
+end
+
+-- Open modem on machine's used port-list
+function commonAPI.initModem(modem, port_list, DNS)
+	for i, port in ipairs(port_list) do
+		modem.open(port)
+	end
+	if DNS then commonAPI.membershipReport(modem, DNS) end
 end
 
 

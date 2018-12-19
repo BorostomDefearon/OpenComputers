@@ -1,4 +1,3 @@
--- TODO: two tanks containing similar liquid! --> server side!
 -- Include
 local serialization = require("serialization")
 local buttonAPI = require("buttonAPI")
@@ -228,7 +227,7 @@ function updateFluids(rawData)
 end
 
 -- INIT
-commonAPI.initModem(modem, ports)
+commonAPI.initModem(modem, ports, DNS)
 event.listen("modem_message", handleModemMessage)
 event.timer(30, requestFluidData, math.huge)
 commonAPI.initCommandHandler()

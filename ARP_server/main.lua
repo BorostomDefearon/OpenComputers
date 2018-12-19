@@ -22,7 +22,7 @@ function drawTable()
 	print("########## Routing Table ##########")
 	print("-----------------------------------")
 	for dns,address in pairs(tRoute) do
-	        print("| "..dns,"|",address.." |")
+	        print(dns.." : "..address)
 	end
 end
 
@@ -41,7 +41,7 @@ end
 function sendRequestedAddress(to, reqDNS)
 	local reqAddress = tRoute[reqDNS]
 	if not reqAddress then
-		modem.send(to, commonAPI.ports.arp.noAddressError, "ERROR! No address found for "..reqDNS..".")
+		modem.send(to, commonAPI.ports.arp.noAddressError, "No address found for "..reqDNS..".")
 	else
 		modem.send(to, commonAPI.ports.arp.sendAddress, reqAddress)
 	end

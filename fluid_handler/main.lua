@@ -39,13 +39,15 @@ function setTransposers()
 	end
 end
 
+-- Transfer fluid
 function transpose(transposer, side, reqQuantity)
 	return transposer.transferFluid(side, outputSide, reqQuantity)
 end
 
+-- Send message to fluid terminal
 function message(address, msgType, msgText)
 	modem.send(address, commonAPI.ports.fluid.message, serialization.serialize({messageType=msgType, text=msgText}))
-	print(msg)
+	print(msgType,msgTex)
 end
 
 
@@ -54,44 +56,63 @@ function serveFluids(array, address)
 	local reqFluid = array.name
 	local reqQuantity = array.quantity
 	local fluid = fluids[reqFluid]
-	-- If fluid available
+	local msgString = ""
+	local msgStatus = nil
+	
+	-- [AVAILABLE FLUID]
 	if fluid ~= nil then
 		local transposer = transposers[fluid.transposer]
 		local side = fluid.side
 		local fluidData = fluid.data
 		local multiple = fluid.multiple
-		-- If amount available
-		if (fluidData.amount - fluidToKeep) > reqQuantity then
+		local bufferCapacity = transposer.getTankCapacity(outputSide)
+		local bufferLevel =  transposer.getTankLevel(outputSide)
 		
-			-- [EMPTY BUFFER]
-			if transposer.getTankLevel(outputSide) == 0 then
-				-- [SINGLE STORED]
-				if not multiple then 
-					if transpose(transposer, side, reqQuantity) then message(address, commonAPI.messages.SUCCESS, "Succeed!")
-					else message(address, commonAPI.messages.ERROR, "Something went wrong... Please check me!") end
-				-- [MULTIPLE STORED]
+		--[BUFFER ATTACHED]
+		if bufferCapacity > 0 then
+			--[SINGLE STORED]
+			if not multiple then msgStatus = commonAPI.messages.SUCCESS
+			--[MULTIPLE STORED]
+			else msgStatus = commonAPI.messages.WARNING; msgString = msgString.." Fluid stored in multiple tanks."
+			end
+			
+			-- [AVAILABLE AMOUNT]
+			if (fluidData.amount - fluidToKeep) >= reqQuantity then
+				
+				-- [EMPTY BUFFER]
+				if bufferLevel == 0 then ; -- Continue...
+				
+				-- [FLUID IN BUFFER]	
 				else
-					if transpose(transposer, side, reqQuantity) then message(address, commonAPI.messages.WARNING, "Succeed, but fluid stored in multiple tanks!")
-					else message(address, commonAPI.messages.ERROR, "Could not satisfy request! Fluid stored in multiple tanks. Please check it!") end
+					local bufferStored = transposer.getFluidInTank(outputSide) [1].name
+					local bufferStoredLabel = transposer.getFluidInTank(outputSide) [1].label
+					--[SAME FLUID]
+					if bufferStored == fluidData.name then msgStatus = commonAPI.messages.WARNING; msgString = msgString.." Buffer already contained some "..bufferStoredLabel.."."
+					--[OTHER FLUID]
+					else msgStatus = commonAPI.messages.ERROR; msgString = msgString.." Buffer contains "..bufferStoredLabel.."."
+					end
 				end
-			-- [SAME FLUID IN BUFFER]	
-			elseif transposer.getFluidInTank(outputSide) [1].name == fluidData.name then
-				-- [SINGLE STORED]
-				if not multiple then 
-					if transpose(transposer, side, reqQuantity) then message(address, commonAPI.messages.WARNING, "Succeed, but previous request's quantity was not consumed yet!")
-					else message(address, commonAPI.messages.ERROR, "Something went wrong... Previous request's quantity was not consumed yet! Maybe buffer is full!") end
-				-- [MULTIPLE STORED]
-				else
-					if transpose(transposer, side, reqQuantity) then message(address, commonAPI.messages.WARNING, "Succeed, but fluid stored in multiple tanks! Buffer also contained previous request's quantity!")
-					else message(address, commonAPI.messages.ERROR, "Could not satisfy request! Fluid stored in multiple tanks. Buffer contained previous request's quantity!") end
+				--[TRANSPOSE]
+				local success, transposedQty = transpose(transposer, side, reqQuantity)
+				
+				-- [SUCCEED]
+				if success then msgString =  "Succeed!"..msgString.."Transposed: "..transposedQty.."/"..reqQuantity.."mB."
+				--[FALIURE]
+				else msgString =  "Faliure!"..msgString
 				end
-			--  [ERROR BUFFER]
-			else message(address, commonAPI.messages.ERROR, "The buffer already contains something else!") end
-		-- If there is not enough fluid
-		else message(address, commonAPI.messages.ERROR, "Not enough fluid!") end
-	-- If there is no such fluid
-	else message(address, commonAPI.messages.ERROR, "No such fluid!") end
+				
+			-- [LESS AMOUNT]
+			else msgStatus = commonAPI.messages.ERROR; msgString = "Failure! Not enough fluid!"..msgString
+			end
+			
+		--[NO BUFFER ATTACHED]
+		else msgStatus = commonAPI.messages.ERROR; msgString = "Failure! No buffer attached."..msgString
+		end
+	-- [NO FLUID]
+	else  msgStatus = commonAPI.messages.ERROR; msgString = "Failure! No such fluid!"..msgString
+	end
 	
+	message(address, msgStatus, msgString)
 	updateFluids()
 end
 
@@ -156,7 +177,7 @@ end
 
 -- INIT
 --print(transposers[1].transferFluid(sides.top, sides.bottom))
-commonAPI.initModem(modem, ports)
+commonAPI.initModem(modem, ports, DNS)
 event.listen("modem_message", handleModemMessage)
 commonAPI.initCommandHandler()
 
