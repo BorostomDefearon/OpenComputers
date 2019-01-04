@@ -8,7 +8,7 @@ local term = require("term")
 local modem = component.modem
 
 -- Constants
-local fluidSides = {sides.top, sides.left, sides.right}
+local fluidSides = {--[[sides.top,--]] sides.left, sides.right}
 local outputSide = sides.bottom
 local fluidToKeep = 1000 --mB
 
@@ -21,6 +21,7 @@ local addresses = {
 local DNS = commonAPI.DNS.FLUID_HANDLER
 local transposers = {}
 local fluids = {}
+local enderTank = component.ender_tank
 local ports = {
 	commonAPI.ports.arp.toServer,
 	commonAPI.ports.arp.fromServer,
@@ -67,6 +68,14 @@ function serveFluids(array, address)
 		local multiple = fluid.multiple
 		local bufferCapacity = transposer.getTankCapacity(outputSide)
 		local bufferLevel =  transposer.getTankLevel(outputSide)
+		
+		--[ENDER TANK HAS SOMETHING]
+		local enderTankInfo = enderTank.getTankInfo()[1].contents
+		if enderTankInfo.amount ~= 0  and enderTankInfo.name ~= fluid.data.name  then
+			message(address, commonAPI.messages.ERROR,"Failure! Ender tank already holds something else!")
+			updateFluids()
+			return
+		end
 		
 		--[BUFFER ATTACHED]
 		if bufferCapacity > 0 then
@@ -145,7 +154,8 @@ function updateFluids()
 	for i,transposer in ipairs(transposers) do
 		for j,side in ipairs(fluidSides) do
 			local fluid = transposer.getFluidInTank(side)[1]
-			if  fluid.label ~= nil then 
+		
+			if fluid and fluid.label ~= nil then 
 				--[ORIGINAL CODE] table.insert(fluids, {data=fluid, transposer=i, side=side})
 				if fluids[fluid.name] == nil then
 					fluids[fluid.name] = {data=fluid, transposer=i, side=side, multiple=false}

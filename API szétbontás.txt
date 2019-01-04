@@ -1,0 +1,19 @@
+COMMONAPI
+local commandButton = "199"
+local APIArray -- API-k URL-jének tárolása frissítésre
+local mainURL -- MAIN fájl URL-je
+
+setMain(URL) -- beállítja a MAIN URL-t (maga a MAIN)
+handleCommands(event, address, char, code) -- Általános parancsokat kezeli
+ARPReplyFilter(eventType, receiverAddress, senderAddress, port, distance, message) -- Válaszol az ARP-ra
+commonAPI.requestAddress(ARPaddress, DNS) -- Lekérdez címet az ARP-tól
+
+MESSAGEAPI
+colors - színek a message-khez
+error,warning és success message-k kiíratása
+
+DNSAPI
+-- DNS-ek!
+
+PORTSAPI
+-- portok!

@@ -64,6 +64,6 @@ commonAPI.initCommandHandler()
 event.timer(30, sendARP, math.huge)
 
 while true do
-	drawTable()
+	commonAPI.redrawScreen(drawTable)
 	os.sleep(5)
 end

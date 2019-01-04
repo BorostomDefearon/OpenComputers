@@ -178,7 +178,7 @@ function drawButtons()
 	else
 		buttons.nxt = fluids[selectedFluidIndex+1].label
 	end
-	GUI()
+	commonAPI.redrawScreen(GUI)
 end
 
 function handleTerminalAnswer(message)

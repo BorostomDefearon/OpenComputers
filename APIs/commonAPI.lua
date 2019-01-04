@@ -3,10 +3,13 @@ local serialization = require("serialization")
 local keyboard=require("keyboard")
 local event = require("event")
 local term = require("term")
+local thread = require("thread")
 
 local modem = component.modem
 local gpu = component.gpu
 local showMessageAmount = 5
+local messageThread = nil
+local commandThread = nil
 
 local colors = {
 	cError=0xFF0000, 
@@ -15,7 +18,7 @@ local colors = {
 	cWarning=0xFFA500
 }
 
-local commandButton = "199"
+local commandButton = 199.0
 
 -- Common messageTypes for error handling
 local messages = {
@@ -26,7 +29,9 @@ local messages = {
 -- DNS names
 local DNS = {
 	FLUID_HANDLER="FLUID_HANDLER",
-	FLUID_TERMINAL="FLUID_TERMINAL"
+	FLUID_TERMINAL="FLUID_TERMINAL",
+	ENERGY_HANDLER="ENERGY_HANDLER",
+	ENERGY_TERMINAL="ENERGY_TERMINAL"
 }
 
 -- Well-known ports
@@ -44,6 +49,12 @@ local basicPorts = {
 		sendFluidData=101,
 		getFluid=102,
 		message=103
+	},
+	energy={
+		requestEnergyData=200,
+		sendEnergyData=201,
+		stopStartEnergy=202,
+		message=203
 	}
 }
 
@@ -62,16 +73,19 @@ function updateAPI()
 end
 
 function handleCommands(event, address, char, code)
-	if tostring(code) == commandButton then
-		local w, h = gpu.getResolution()
-		term.setCursor(1, h)
-		command = io.read()
-		if command == "exit" then
-			os.execute("reboot")
-		elseif command == "update" then
-			updateAPI()
-		end
-	end
+	commandThread = thread.create(function()
+    if tonumber(code) == commandButton then
+      local w, h = gpu.getResolution()
+      term.setCursor(1, h)
+      command = io.read()
+      if command == "exit" then
+        os.execute("reboot")
+      elseif command == "update" then
+        updateAPI()
+      end
+    end
+    commandThread = nil
+  end)
 end
 
 -- Filtered listening to arp server reply
@@ -88,6 +102,13 @@ end
 --############################
 -- Public functions
 --############################
+
+-- Thread-safe redraw function
+function commonAPI.redrawScreen(func)
+  if not commandThread and not messageThread then
+    func()
+  end
+end 
 
 -- Request specific address from ARP
 function commonAPI.requestAddress(ARPaddress, DNS)
@@ -106,32 +127,53 @@ end
 
 -- Writes error message
 function commonAPI.writeError(errorMsg)
-		local w, h = gpu.getResolution()
-		
-		term.setCursor(1, h)
-		gpu.setForeground(colors.cError)
-		print("[ERROR] "..errorMsg)
-		gpu.setForeground(colors.cNormal)
+    while messageThread ~= nil do
+    -- wait
+    end
+    messageThread = thread.create(function()
+      local w, h = gpu.getResolution()
+      term.setCursor(1, h-1)
+      gpu.setForeground(colors.cError)
+      print("[ERROR] "..errorMsg)
+      gpu.setForeground(colors.cNormal)
+      os.sleep(showMessageAmount)
+      messageThread = nil
+    end)
+    thread.waitForAll({t})
 end
 
 -- Writes success message
 function commonAPI.writeSuccess(successMsg)
-		local w, h = gpu.getResolution()
-		
-		term.setCursor(1, h)
-		gpu.setForeground(colors.cSuccess)
-		print("[SUCCESS] "..successMsg)
-		gpu.setForeground(colors.cNormal)
+    while messageThread ~= nil do
+    -- wait
+    end
+    messageThread = thread.create(function()
+      local w, h = gpu.getResolution()
+      term.setCursor(1, h-1)
+      gpu.setForeground(colors.cSuccess)
+      print("[SUCCESS] "..successMsg)
+      gpu.setForeground(colors.cNormal)
+      os.sleep(showMessageAmount)
+      messageThread = nil
+    end)
+    thread.waitForAll({t})
 end
 
 -- Writes warning message
 function commonAPI.writeWarning(warningMsg)
-		local w, h = gpu.getResolution()
-		
-		term.setCursor(1, h)
-		gpu.setForeground(colors.cWarning)
-		print("[WARNING] "..warningMsg)
-		gpu.setForeground(colors.cNormal)
+  while messageThread ~= nil do
+    -- wait
+    end
+		messageThread = thread.create(function()
+      local w, h = gpu.getResolution()
+      term.setCursor(1, h-1)
+      gpu.setForeground(colors.cWarning)
+      print("[WARNING] "..warningMsg)
+      gpu.setForeground(colors.cNormal)
+      os.sleep(showMessageAmount)
+      messageThread = nil
+    end)
+    thread.waitForAll({t})
 end
 
 -- Reboot computer
